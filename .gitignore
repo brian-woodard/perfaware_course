@@ -1,2 +1,5 @@
 *.o
+part1/listing_0037_single_register_mov
+part1/listing_0038_many_register_mov
 part1/main
+part1/output*
