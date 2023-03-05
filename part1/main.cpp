@@ -2,8 +2,11 @@
 #include <fstream>
 #include <string>
 
-#define INTEL_REG_MOV_OPCODE    0x88
-#define INTEL_IMM_TO_REG_OPCODE 0xB0
+#define INTEL_REG_MOV_OPCODE       0x88
+#define INTEL_IMM_TO_REG_OPCODE    0xB0
+#define INTEL_IMM_TO_REGMEM_OPCODE 0xC6
+#define INTEL_MEM_TO_ACCUM_OPCODE  0xA0
+#define INTEL_ACCUM_TO_MEM_OPCODE  0xA2
 
 struct T_RegisterMovOpcodeByte
 {
@@ -77,7 +80,18 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
 
          if (reg.Mode == 0)
          {
-            if (opcode.Destination)
+            uint16_t direct_address = 0;
+
+            if (reg.Rm == 6)
+            {
+               // read two bytes for direct address
+               direct_address = *(uint16_t*)&Buffer[i];
+               i += 2;
+            }
+
+            if (direct_address)
+               out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << direct_address << "]" << std::endl;
+            else if (opcode.Destination)
                out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << EffectiveAddressTable[reg.Rm] << "]" << std::endl;
             else
                out << "mov " << "[" << EffectiveAddressTable[reg.Rm] << "], " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
@@ -85,14 +99,18 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
          else if (reg.Mode == 1)
          {
             std::string effective_address;
+            int16_t     signed_displacement;
 
             // read one byte for displacement
             displacement = Buffer[i++];
+            signed_displacement = displacement;
 
             effective_address = "[";
             effective_address += EffectiveAddressTable[reg.Rm];
 
-            if (displacement)
+            if (signed_displacement < 0)
+               effective_address += " - " + std::to_string(abs(signed_displacement)) + "]";
+            else if (displacement)
                effective_address += " + " + std::to_string(displacement) + "]";
             else
                effective_address += "]";
@@ -105,15 +123,19 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
          else if (reg.Mode == 2)
          {
             std::string effective_address;
+            int16_t     signed_displacement;
 
             // read two bytes for displacement
             displacement = *(uint16_t*)&Buffer[i];
+            signed_displacement = displacement;
             i += 2;
 
             effective_address = "[";
             effective_address += EffectiveAddressTable[reg.Rm];
 
-            if (displacement)
+            if (signed_displacement < 0)
+               effective_address += " - " + std::to_string(abs(signed_displacement)) + "]";
+            else if (displacement)
                effective_address += " + " + std::to_string(displacement) + "]";
             else
                effective_address += "]";
@@ -147,6 +169,80 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
             immediate_value = Buffer[i++];
 
          out << "mov " << RegisterTable[opcode.Word][opcode.Reg] << ", " << immediate_value << std::endl;
+      }
+      else if ((Buffer[i] & 0xfe) == INTEL_IMM_TO_REGMEM_OPCODE)
+      {
+         T_RegisterByte reg;
+         std::string    explicit_size;
+         std::string    effective_address;
+         uint16_t       displacement = 0;
+         int16_t        signed_displacement = 0;
+         uint16_t       data = 0;
+         uint8_t        word = (Buffer[i] & 0x1);
+
+         i++;
+         *(uint8_t*)&reg = Buffer[i++];
+
+         // read one or two bytes for displacement
+         if (reg.Mode == 1)
+         {
+            displacement = Buffer[i++];
+            signed_displacement = displacement;
+         }
+         else if (reg.Mode == 2)
+         {
+            displacement = *(uint16_t*)&Buffer[i];
+            signed_displacement = displacement;
+            i += 2;
+         }
+
+         // read one or two bytes for data
+         if (word)
+         {
+            data = *(uint16_t*)&Buffer[i];
+            i += 2;
+            explicit_size = "word";
+         }
+         else
+         {
+            data = Buffer[i++];
+            explicit_size = "byte";
+         }
+
+         effective_address = "[";
+         effective_address += EffectiveAddressTable[reg.Rm];
+
+         if (signed_displacement < 0)
+            effective_address += " - " + std::to_string(abs(signed_displacement)) + "]";
+         else if (displacement)
+            effective_address += " + " + std::to_string(displacement) + "]";
+         else
+            effective_address += "]";
+
+         out << "mov " << effective_address << ", " << explicit_size << " " << data << std::endl;
+      }
+      else if ((Buffer[i] & 0xfe) == INTEL_MEM_TO_ACCUM_OPCODE ||
+               (Buffer[i] & 0xfe) == INTEL_ACCUM_TO_MEM_OPCODE)
+      {
+         uint16_t direct_address = 0;
+         uint8_t  word = (Buffer[i] & 0x1);
+         uint8_t  mem_to_accum = (Buffer[i] & 0xfe) == INTEL_MEM_TO_ACCUM_OPCODE;
+
+         i++;
+
+         // read one or two bytes for data
+         if (word)
+         {
+            direct_address = *(uint16_t*)&Buffer[i];
+            i += 2;
+         }
+         else
+            direct_address = Buffer[i++];
+
+         if (mem_to_accum)
+            out << "mov ax, [" << direct_address << "]" << std::endl;
+         else
+            out << "mov [" << direct_address << "], ax" << std::endl;
       }
       else
       {
