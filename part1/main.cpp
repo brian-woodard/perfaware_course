@@ -1,9 +1,11 @@
 #include <iostream>
 #include <fstream>
+#include <string>
 
-#define INTEL_MOV_OPCODE 0x22
+#define INTEL_REG_MOV_OPCODE    0x88
+#define INTEL_IMM_TO_REG_OPCODE 0xB0
 
-struct T_OpcodeByte
+struct T_RegisterMovOpcodeByte
 {
    uint8_t Word        : 1; // if set, use 16-bit data
    uint8_t Destination : 1; // if set, destination is set in REG field
@@ -15,6 +17,13 @@ struct T_RegisterByte
    uint8_t Rm   : 3;
    uint8_t Reg  : 3;
    uint8_t Mode : 2;
+};
+
+struct T_ImmediateToRegisterOpcodeByte
+{
+   uint8_t Reg    : 3;
+   uint8_t Word   : 1; // if set, use 16-bit data
+   uint8_t Opcode : 4;
 };
 
 const char* RegisterTable[2][8] = 
@@ -41,37 +50,108 @@ const char* RegisterTable[2][8] =
    }
 };
 
+const char* EffectiveAddressTable[] =
+{
+   "bx + si",
+   "bx + di",
+   "bp + si",
+   "bp + di",
+   "si",
+   "di",
+   "bp",
+   "bx"
+};
+
 void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
 {
-   for (uint32_t i = 0; i < BufferSize; i++)
+   for (uint32_t i = 0; i < BufferSize;)
    {
-      T_OpcodeByte opcode;
-      
-      *(uint8_t*)&opcode = Buffer[i++];
-
-      switch (opcode.Opcode)
+      if ((Buffer[i] & 0xfc) == INTEL_REG_MOV_OPCODE)
       {
-         case INTEL_MOV_OPCODE:
+         T_RegisterByte          reg;
+         T_RegisterMovOpcodeByte opcode;
+         uint16_t                displacement = 0;
+
+         *(uint8_t*)&opcode = Buffer[i++];
+         *(uint8_t*)&reg = Buffer[i++];
+
+         if (reg.Mode == 0)
          {
-            T_RegisterByte reg;
+            if (opcode.Destination)
+               out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << EffectiveAddressTable[reg.Rm] << "]" << std::endl;
+            else
+               out << "mov " << "[" << EffectiveAddressTable[reg.Rm] << "], " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+         }
+         else if (reg.Mode == 1)
+         {
+            std::string effective_address;
 
-            *(uint8_t*)&reg = Buffer[i];
+            // read one byte for displacement
+            displacement = Buffer[i++];
 
-            if (reg.Mode != 3)
-            {
-               std::cout << "Error: Only know how to decode register-to-register MOV" << std::endl;
-               continue;
-            }
+            effective_address = "[";
+            effective_address += EffectiveAddressTable[reg.Rm];
 
+            if (displacement)
+               effective_address += " + " + std::to_string(displacement) + "]";
+            else
+               effective_address += "]";
+
+            if (opcode.Destination)
+               out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << effective_address << std::endl;
+            else
+               out << "mov " << effective_address << ", " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+         }
+         else if (reg.Mode == 2)
+         {
+            std::string effective_address;
+
+            // read two bytes for displacement
+            displacement = *(uint16_t*)&Buffer[i];
+            i += 2;
+
+            effective_address = "[";
+            effective_address += EffectiveAddressTable[reg.Rm];
+
+            if (displacement)
+               effective_address += " + " + std::to_string(displacement) + "]";
+            else
+               effective_address += "]";
+
+            if (opcode.Destination)
+               out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << effective_address << std::endl;
+            else
+               out << "mov " << effective_address << ", " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+         }
+         else if (reg.Mode == 3)
+         {
             if (opcode.Destination)
                out << "mov " << RegisterTable[opcode.Word][reg.Reg] << ", " << RegisterTable[opcode.Word][reg.Rm] << std::endl;
             else
                out << "mov " << RegisterTable[opcode.Word][reg.Rm] << ", " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
-
-            break;
          }
-         default:
-            std::cout << "Error: Uknown opcode " << std::hex << (uint16_t)opcode.Opcode << " at " << i << std::endl;
+      }
+      else if ((Buffer[i] & 0xf0) == INTEL_IMM_TO_REG_OPCODE)
+      {
+         T_ImmediateToRegisterOpcodeByte opcode;
+         uint16_t                        immediate_value = 0;
+         
+         *(uint8_t*)&opcode = Buffer[i++];
+
+         if (opcode.Word)
+         {
+            immediate_value = *(uint16_t*)&Buffer[i];
+            i += 2;
+         }
+         else
+            immediate_value = Buffer[i++];
+
+         out << "mov " << RegisterTable[opcode.Word][opcode.Reg] << ", " << immediate_value << std::endl;
+      }
+      else
+      {
+         std::cout << "Error: Uknown opcode " << std::hex << (uint16_t)Buffer[i] << " at " << i << std::endl;
+         i++;
       }
    }
 }
