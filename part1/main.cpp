@@ -14,6 +14,26 @@
 #define INTEL_SUB_IMM_TO_ACCUM_OPCODE  0x2C
 #define INTEL_REG_CMP_OPCODE           0x38
 #define INTEL_CMP_IMM_TO_ACCUM_OPCODE  0x3C
+#define INTEL_JO_OPCODE                0x70
+#define INTEL_JNO_OPCODE               0x71
+#define INTEL_JB_OPCODE                0x72
+#define INTEL_JNB_OPCODE               0x73
+#define INTEL_JE_OPCODE                0x74
+#define INTEL_JNZ_OPCODE               0x75
+#define INTEL_JBE_OPCODE               0x76
+#define INTEL_JA_OPCODE                0x77
+#define INTEL_JS_OPCODE                0x78
+#define INTEL_JNS_OPCODE               0x79
+#define INTEL_JP_OPCODE                0x7A
+#define INTEL_JNP_OPCODE               0x7B
+#define INTEL_JL_OPCODE                0x7C
+#define INTEL_JNL_OPCODE               0x7D
+#define INTEL_JLE_OPCODE               0x7E
+#define INTEL_JG_OPCODE                0x7F
+#define INTEL_LOOPNZ_OPCODE            0xE0
+#define INTEL_LOOPZ_OPCODE             0xE1
+#define INTEL_LOOP_OPCODE              0xE2
+#define INTEL_JCXZ_OPCODE              0xE3
 
 struct T_RegisterMovOpcodeByte
 {
@@ -345,6 +365,206 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
             else
                out << "mov [" << direct_address << "], ax" << std::endl;
          }
+      }
+      else if (Buffer[i] == INTEL_JO_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jo " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JNO_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jno " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JB_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jb " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JNB_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jnb " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JE_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "je " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JNZ_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jnz " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JBE_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jbe " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JA_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "ja " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JS_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "js " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JNS_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jns " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JP_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jp " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JNP_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jnp " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JL_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jl " << (int16_t)instruction_pointer << std::endl;
+      }
+         else if (Buffer[i] == INTEL_JNL_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jnl " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JLE_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jle " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if (Buffer[i] == INTEL_JG_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jg " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if ((Buffer[i] & 0xff) == INTEL_LOOPNZ_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "loopnz " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if ((Buffer[i] & 0xff) == INTEL_LOOPZ_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "loopz " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if ((Buffer[i] & 0xff) == INTEL_LOOP_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "loop " << (int16_t)instruction_pointer << std::endl;
+      }
+      else if ((Buffer[i] & 0xff) == INTEL_JCXZ_OPCODE)
+      {
+         int8_t instruction_pointer = 0;
+         i++;
+
+         // read one byte for instruction pointer
+         instruction_pointer = *(int8_t*)&Buffer[i++];
+
+         out << "jcxz " << (int16_t)instruction_pointer << std::endl;
       }
       else
       {
