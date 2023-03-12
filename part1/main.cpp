@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <string.h>
 
 #define INTEL_REG_MOV_OPCODE           0x88
 #define INTEL_MOV_IMM_TO_REG_OPCODE    0xB0
@@ -192,6 +193,10 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
    int16_t        signed_data = 0;
    uint8_t        sign = ((Buffer[i] >> 1) & 0x1);
    uint8_t        word = (Buffer[i] & 0x1);
+   bool           mov_cmd = false;
+
+   if (strncmp("mov", Command, 3) == 0)
+      mov_cmd = true;
 
    i++;
    *(uint8_t*)&reg = Buffer[i++];
@@ -211,7 +216,7 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
    }
 
    // read one or two bytes for data
-   if (word && sign)
+   if (word && sign && !mov_cmd)
    {
       // read one byte and sign-extend to two bytes
       data = Buffer[i++];
