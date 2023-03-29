@@ -1,7 +1,23 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <string>
 #include <string.h>
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t   s8;
+typedef int16_t  s16;
+typedef int32_t  s32;
+typedef int64_t  s64;
+typedef float    f32;
+typedef double   f64;
+
+///////////////////////////////////////////////////////////////////////////////
+// Types and constants for decoding
+///////////////////////////////////////////////////////////////////////////////
 
 #define INTEL_REG_MOV_OPCODE           0x88
 #define INTEL_MOV_IMM_TO_REG_OPCODE    0xB0
@@ -93,7 +109,26 @@ const char* EffectiveAddressTable[] =
    "bx"
 };
 
-uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out)
+///////////////////////////////////////////////////////////////////////////////
+// Types and constants for simulating
+///////////////////////////////////////////////////////////////////////////////
+
+enum RegisterEnum
+{
+   Reg_ax,
+   Reg_cx,
+   Reg_dx,
+   Reg_bx,
+   Reg_sp,
+   Reg_bp,
+   Reg_si,
+   Reg_di,
+   Num_Registers
+};
+
+u16 Registers[Num_Registers] = {};
+
+uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out, bool execute = false)
 {
    T_RegisterByte          reg;
    T_RegisterMovOpcodeByte opcode;
@@ -173,15 +208,39 @@ uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t
    else if (reg.Mode == 3)
    {
       if (opcode.Destination)
-         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << RegisterTable[opcode.Word][reg.Rm] << std::endl;
+         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << RegisterTable[opcode.Word][reg.Rm];
       else
-         out << Command << " " << RegisterTable[opcode.Word][reg.Rm] << ", " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+         out << Command << " " << RegisterTable[opcode.Word][reg.Rm] << ", " << RegisterTable[opcode.Word][reg.Reg];
+
+      if (execute && opcode.Word)
+      {
+         u16* dst = &Registers[reg.Rm];
+         u16* src = &Registers[reg.Reg];
+         const char* table = RegisterTable[opcode.Word][reg.Rm];
+
+         if (opcode.Destination)
+         {
+            dst = src;
+            src = &Registers[reg.Rm];
+            table = RegisterTable[opcode.Word][reg.Reg];
+         }
+
+         if (*dst != *src)
+         {
+            out << "; " << table
+                << std::hex << ":0x" << *dst
+                << "->0x" << *src;
+            *dst = *src;
+         }
+      }
+
+      out << std::endl;
    }
 
    return i;
 }
 
-uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out)
+uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out, bool execute = false)
 {
    uint32_t       i = Index;
    T_RegisterByte reg;
@@ -266,17 +325,17 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
    return i;
 }
 
-void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
+void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool execute)
 {
    for (uint32_t i = 0; i < BufferSize;)
    {
       if ((Buffer[i] & 0xfc) == INTEL_REG_MOV_OPCODE)
       {
-         i = decode_register_to_register("mov", Buffer, i, out);
+         i = decode_register_to_register("mov", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_MOV_IMM_TO_REGMEM_OPCODE)
       {
-         i = decode_immediate_to_register("mov", Buffer, i, out);
+         i = decode_immediate_to_register("mov", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_REG_ADD_OPCODE)
       {
@@ -306,7 +365,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
       else if ((Buffer[i] & 0xf0) == INTEL_MOV_IMM_TO_REG_OPCODE)
       {
          T_ImmediateToRegisterOpcodeByte opcode;
-         uint16_t                        immediate_value = 0;
+         u16                             immediate_value = 0;
          
          *(uint8_t*)&opcode = Buffer[i++];
 
@@ -318,7 +377,20 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out)
          else
             immediate_value = Buffer[i++];
 
-         out << "mov " << RegisterTable[opcode.Word][opcode.Reg] << ", " << immediate_value << std::endl;
+         out << "mov " << RegisterTable[opcode.Word][opcode.Reg] << ", " << immediate_value;
+
+         if (execute && opcode.Word)
+         {
+            if (Registers[opcode.Reg] != immediate_value)
+            {
+               out << "; " << RegisterTable[opcode.Word][opcode.Reg]
+                   << std::hex << ":0x" << Registers[opcode.Reg]
+                   << "->0x" << immediate_value;
+               Registers[opcode.Reg] = immediate_value;
+            }
+         }
+
+         out << std::endl;
       }
       else if ((Buffer[i] & 0xfe) == INTEL_MOV_MEM_TO_ACCUM_OPCODE ||
                (Buffer[i] & 0xfe) == INTEL_MOV_ACCUM_TO_MEM_OPCODE ||
@@ -583,16 +655,23 @@ int main(int argc, char* argv[])
 {
    char*         buffer = nullptr;
    uint32_t      buffer_size;
+   bool          execute = false;
    std::ifstream input_file;
    std::ofstream output_file("output.asm");
 
-   if (argc != 2)
+   if (argc != 2 && argc != 3)
    {
-      std::cout << "Usage: main <assembly-file>" << std::endl;
+      std::cout << "Usage: main [-exec] <assembly-file>" << std::endl;
       return 0;
    }
 
-   input_file.open(argv[1], std::ios::binary);
+   if (argc == 2)
+      input_file.open(argv[1], std::ios::binary);
+   else
+   {
+      input_file.open(argv[2], std::ios::binary);
+      execute = true;
+   }
 
    if (!input_file.is_open())
    {
@@ -614,7 +693,15 @@ int main(int argc, char* argv[])
    output_file << "bits 16" << std::endl << std::endl;
 
    std::cout << "Disassembler running over " << buffer_size << " bytes" << std::endl;
-   intel_decode(buffer, buffer_size, output_file);
+   intel_decode(buffer, buffer_size, output_file, execute);
+
+   output_file << std::endl << "Final registers:" << std::endl;
+
+   for (int i = 0; i < Num_Registers; i++)
+   {
+      output_file << "      " << RegisterTable[1][i] << ": 0x" 
+                  << std::setfill('0') << std::setw(4) << Registers[i] << std::endl;
+   }
 
    input_file.close();
    output_file.close();
