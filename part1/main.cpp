@@ -110,7 +110,7 @@ const char* EffectiveAddressTable[] =
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-// Types and constants for simulating
+// Types, constants and functions for simulating
 ///////////////////////////////////////////////////////////////////////////////
 
 enum RegisterEnum
@@ -126,14 +126,172 @@ enum RegisterEnum
    Num_Registers
 };
 
-u16 Registers[Num_Registers] = {};
+enum FlagsEnum
+{
+   ZeroFlag = 0x0001,
+   SignFlag = 0x0002,
+};
 
-uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out, bool execute = false)
+u16 Registers[Num_Registers] = {};
+u16 IpRegister = 0;
+u16 IpRegisterPv = 0;
+u16 Flags = 0;
+
+void sim86_check_flags(u16 NewFlags, std::ofstream& Out)
+{
+   if (NewFlags != Flags)
+   {
+      Out << " flags:";
+
+      if (Flags & ZeroFlag)
+         Out << "Z";
+
+      if (Flags & SignFlag)
+         Out << "S";
+
+      Out << "->";
+
+      if (NewFlags & ZeroFlag)
+         Out << "Z";
+
+      if (NewFlags & SignFlag)
+         Out << "S";
+
+      Flags = NewFlags;
+   }
+}
+
+void sim86_check_ip(std::ofstream& Out)
+{
+   if (IpRegister != IpRegisterPv)
+   {
+      Out << " ip"
+         << std::hex << ":0x" << IpRegisterPv
+         << "->0x" << IpRegister
+         << std::dec;
+
+      IpRegisterPv = IpRegister;
+   }
+}
+
+void sim86_jnz(s16 Jump, std::ofstream& Out)
+{
+   if (!(Flags & ZeroFlag))
+   {
+      IpRegister += Jump;
+   }
+
+   Out << " ;";
+
+   sim86_check_ip(Out);
+}
+
+void sim86_move_word(u16 Dst, u16 Value, std::ofstream& Out)
+{
+   if (Registers[Dst] != Value)
+   {
+      Out << "; " << RegisterTable[1][Dst]
+          << std::hex << ":0x" << Registers[Dst]
+          << "->0x" << Value << std::dec;
+
+      Registers[Dst] = Value;
+   }
+
+   sim86_check_ip(Out);
+}
+
+void sim86_move_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   if (Registers[Dst] != Registers[Src])
+   {
+      Out << "; " << RegisterTable[1][Dst]
+          << std::hex << ":0x" << Registers[Dst]
+          << "->0x" << Registers[Src] << std::dec;
+
+      Registers[Dst] = Registers[Src];
+   }
+
+   sim86_check_ip(Out);
+}
+
+void sim86_add_word(u16 Dst, u16 Value, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] + Value;
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst]
+       << "->0x" << result << std::dec;
+
+   sim86_check_ip(Out);
+
+   sim86_check_flags(flags, Out);
+
+   Registers[Dst] = result;
+}
+
+void sim86_sub_word(u16 Dst, u16 Value, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] - Value;
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst]
+       << "->0x" << result << std::dec;
+
+   sim86_check_ip(Out);
+
+   sim86_check_flags(flags, Out);
+
+   Registers[Dst] = result;
+}
+
+void sim86_sub_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] - Registers[Src];
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst]
+       << "->0x" << result << std::dec;
+
+   sim86_check_ip(Out);
+
+   sim86_check_flags(flags, Out);
+
+   Registers[Dst] = result;
+}
+
+void sim86_cmp_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] - Registers[Src];
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; ";
+
+   sim86_check_flags(flags, Out);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+uint32_t decode_register_to_register(u8 Opcode, const char* Command, char* Buffer, u16& Index, std::ofstream& out, bool execute = false)
 {
    T_RegisterByte          reg;
    T_RegisterMovOpcodeByte opcode;
    uint16_t                displacement = 0;
-   uint32_t                i = Index;
+   auto&                   i = Index;
 
    *(uint8_t*)&opcode = Buffer[i++];
    *(uint8_t*)&reg = Buffer[i++];
@@ -212,25 +370,28 @@ uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t
       else
          out << Command << " " << RegisterTable[opcode.Word][reg.Rm] << ", " << RegisterTable[opcode.Word][reg.Reg];
 
-      if (execute && opcode.Word)
+      if (execute)
       {
-         u16* dst = &Registers[reg.Rm];
-         u16* src = &Registers[reg.Reg];
-         const char* table = RegisterTable[opcode.Word][reg.Rm];
-
-         if (opcode.Destination)
+         if (Opcode == INTEL_REG_MOV_OPCODE && opcode.Word)
          {
-            dst = src;
-            src = &Registers[reg.Rm];
-            table = RegisterTable[opcode.Word][reg.Reg];
+            if (opcode.Destination)
+               sim86_move_reg_word(reg.Reg, reg.Rm, out);
+            else
+               sim86_move_reg_word(reg.Rm, reg.Reg, out);
          }
-
-         if (*dst != *src)
+         else if (Opcode == INTEL_REG_SUB_OPCODE && opcode.Word)
          {
-            out << "; " << table
-                << std::hex << ":0x" << *dst
-                << "->0x" << *src;
-            *dst = *src;
+            if (opcode.Destination)
+               sim86_sub_reg_word(reg.Reg, reg.Rm, out);
+            else
+               sim86_sub_reg_word(reg.Rm, reg.Reg, out);
+         }
+         else if (Opcode == INTEL_REG_CMP_OPCODE && opcode.Word)
+         {
+            if (opcode.Destination)
+               sim86_cmp_reg_word(reg.Reg, reg.Rm, out);
+            else
+               sim86_cmp_reg_word(reg.Rm, reg.Reg, out);
          }
       }
 
@@ -240,9 +401,9 @@ uint32_t decode_register_to_register(const char* Command, char* Buffer, uint32_t
    return i;
 }
 
-uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_t Index, std::ofstream& out, bool execute = false)
+uint32_t decode_immediate_to_register(const char* Command, char* Buffer, u16& Index, std::ofstream& out, bool execute = false)
 {
-   uint32_t       i = Index;
+   auto&          i = Index;
    T_RegisterByte reg;
    std::string    explicit_size;
    std::string    effective_address;
@@ -253,9 +414,18 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
    uint8_t        sign = ((Buffer[i] >> 1) & 0x1);
    uint8_t        word = (Buffer[i] & 0x1);
    bool           mov_cmd = false;
+   bool           add_cmd = false;
+   bool           sub_cmd = false;
+   bool           cmp_cmd = false;
 
    if (strncmp("mov", Command, 3) == 0)
       mov_cmd = true;
+   else if (strncmp("add", Command, 3) == 0)
+      add_cmd = true;
+   else if (strncmp("sub", Command, 3) == 0)
+      sub_cmd = true;
+   else
+      cmp_cmd = true;
 
    i++;
    *(uint8_t*)&reg = Buffer[i++];
@@ -298,7 +468,21 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
 
    if (reg.Mode == 3)
    {
-      out << Command << " " << RegisterTable[word][reg.Rm] << ", " << signed_data << std::endl;
+      out << Command << " " << RegisterTable[word][reg.Rm] << ", " << signed_data;
+
+      if (execute)
+      {
+         if (add_cmd && word)
+         {
+            sim86_add_word(reg.Rm, signed_data, out);
+         }
+         else if (sub_cmd && word)
+         {
+            sim86_sub_word(reg.Rm, signed_data, out);
+         }
+      }
+
+      out << std::endl;
    }
    else
    {
@@ -327,11 +511,13 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, uint32_
 
 void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool execute)
 {
-   for (uint32_t i = 0; i < BufferSize;)
+   for (IpRegister = 0; IpRegister < BufferSize;)
    {
+      auto& i = IpRegister;
+
       if ((Buffer[i] & 0xfc) == INTEL_REG_MOV_OPCODE)
       {
-         i = decode_register_to_register("mov", Buffer, i, out, execute);
+         i = decode_register_to_register(INTEL_REG_MOV_OPCODE, "mov", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_MOV_IMM_TO_REGMEM_OPCODE)
       {
@@ -339,16 +525,16 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
       }
       else if ((Buffer[i] & 0xfc) == INTEL_REG_ADD_OPCODE)
       {
-         i = decode_register_to_register("add", Buffer, i, out);
+         i = decode_register_to_register(INTEL_REG_ADD_OPCODE, "add", Buffer, i, out);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_IMM_TO_REGMEM_OPCODE)
       {
          uint8_t reg = ((Buffer[i+1] >> 3) & 0x7);
 
          if (reg == 0) // add
-            i = decode_immediate_to_register("add", Buffer, i, out);
+            i = decode_immediate_to_register("add", Buffer, i, out, execute);
          else if (reg == 5) // sub
-            i = decode_immediate_to_register("sub", Buffer, i, out);
+            i = decode_immediate_to_register("sub", Buffer, i, out, execute);
          else if (reg == 7) // cmp
             i = decode_immediate_to_register("cmp", Buffer, i, out);
          else
@@ -356,11 +542,11 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
       }
       else if ((Buffer[i] & 0xfc) == INTEL_REG_SUB_OPCODE)
       {
-         i = decode_register_to_register("sub", Buffer, i, out);
+         i = decode_register_to_register(INTEL_REG_SUB_OPCODE, "sub", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_REG_CMP_OPCODE)
       {
-         i = decode_register_to_register("cmp", Buffer, i, out);
+         i = decode_register_to_register(INTEL_REG_CMP_OPCODE, "cmp", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xf0) == INTEL_MOV_IMM_TO_REG_OPCODE)
       {
@@ -380,15 +566,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
          out << "mov " << RegisterTable[opcode.Word][opcode.Reg] << ", " << immediate_value;
 
          if (execute && opcode.Word)
-         {
-            if (Registers[opcode.Reg] != immediate_value)
-            {
-               out << "; " << RegisterTable[opcode.Word][opcode.Reg]
-                   << std::hex << ":0x" << Registers[opcode.Reg]
-                   << "->0x" << immediate_value;
-               Registers[opcode.Reg] = immediate_value;
-            }
-         }
+            sim86_move_word(opcode.Reg, immediate_value, out);
 
          out << std::endl;
       }
@@ -501,7 +679,12 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
          // read one byte for instruction pointer
          instruction_pointer = *(int8_t*)&Buffer[i++];
 
-         out << "jnz " << (int16_t)instruction_pointer << std::endl;
+         out << "jnz " << (int16_t)instruction_pointer;
+
+         if (execute)
+            sim86_jnz(instruction_pointer, out);
+
+         out << std::endl;
       }
       else if (Buffer[i] == INTEL_JBE_OPCODE)
       {
@@ -573,7 +756,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
 
          out << "jl " << (int16_t)instruction_pointer << std::endl;
       }
-         else if (Buffer[i] == INTEL_JNL_OPCODE)
+      else if (Buffer[i] == INTEL_JNL_OPCODE)
       {
          int8_t instruction_pointer = 0;
          i++;
@@ -645,7 +828,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
       }
       else
       {
-         std::cout << "Error: Uknown opcode " << std::hex << (uint16_t)Buffer[i] << " at " << i << std::endl;
+         std::cout << "Error: Uknown opcode " << std::hex << (uint16_t)Buffer[i] << " at " << std::dec << i << std::endl;
          return;
       }
    }
@@ -699,8 +882,28 @@ int main(int argc, char* argv[])
 
    for (int i = 0; i < Num_Registers; i++)
    {
-      output_file << "      " << RegisterTable[1][i] << ": 0x" 
-                  << std::setfill('0') << std::setw(4) << Registers[i] << std::endl;
+      if (Registers[i])
+      {
+         output_file << "      " << RegisterTable[1][i] << ": 0x" 
+            << std::hex << std::setfill('0') << std::setw(4) << Registers[i] 
+            << std::dec << " (" << Registers[i] << ")" << std::endl;
+      }
+   }
+
+   output_file << "      " << "ip: 0x" 
+      << std::hex << std::setfill('0') << std::setw(4) << IpRegister 
+      << std::dec << " (" << IpRegister << ")" << std::endl;
+
+   if (Flags)
+   {
+      output_file << "   flags: ";
+
+      if (Flags & ZeroFlag)
+         output_file << "Z";
+      if (Flags & SignFlag)
+         output_file << "S";
+
+      output_file << std::endl;
    }
 
    input_file.close();
