@@ -97,6 +97,18 @@ const char* RegisterTable[2][8] =
    }
 };
 
+enum EffectiveAddressEnum
+{
+   EA_Regs_bx_si,
+   EA_Regs_bx_di,
+   EA_Regs_bp_si,
+   EA_Regs_bp_di,
+   EA_Reg_si,
+   EA_Reg_di,
+   EA_Reg_bp,
+   EA_Reg_bx
+};
+
 const char* EffectiveAddressTable[] =
 {
    "bx + si",
@@ -132,6 +144,9 @@ enum FlagsEnum
    SignFlag = 0x0002,
 };
 
+const u32 MEMORY_SIZE = 1024 * 1024;
+
+u8 Memory[MEMORY_SIZE] = {};
 u16 Registers[Num_Registers] = {};
 u16 IpRegister = 0;
 u16 IpRegisterPv = 0;
@@ -188,9 +203,11 @@ void sim86_jnz(s16 Jump, std::ofstream& Out)
 
 void sim86_move_word(u16 Dst, u16 Value, std::ofstream& Out)
 {
+   Out << "; ";
+
    if (Registers[Dst] != Value)
    {
-      Out << "; " << RegisterTable[1][Dst]
+      Out << RegisterTable[1][Dst]
           << std::hex << ":0x" << Registers[Dst]
           << "->0x" << Value << std::dec;
 
@@ -202,9 +219,11 @@ void sim86_move_word(u16 Dst, u16 Value, std::ofstream& Out)
 
 void sim86_move_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
 {
+   Out << "; ";
+
    if (Registers[Dst] != Registers[Src])
    {
-      Out << "; " << RegisterTable[1][Dst]
+      Out << RegisterTable[1][Dst]
           << std::hex << ":0x" << Registers[Dst]
           << "->0x" << Registers[Src] << std::dec;
 
@@ -217,6 +236,25 @@ void sim86_move_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
 void sim86_add_word(u16 Dst, u16 Value, std::ofstream& Out)
 {
    u16 result = Registers[Dst] + Value;
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst]
+       << "->0x" << result << std::dec;
+
+   sim86_check_ip(Out);
+
+   sim86_check_flags(flags, Out);
+
+   Registers[Dst] = result;
+}
+
+void sim86_add_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] + Registers[Src];
    u16 flags = 0;
 
    flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
@@ -271,6 +309,21 @@ void sim86_sub_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
    Registers[Dst] = result;
 }
 
+void sim86_cmp_word(u16 Dst, u16 Value, std::ofstream& Out)
+{
+   u16 result = Registers[Dst] - Value;
+   u16 flags = 0;
+
+   flags |= ((result & 0x8000) >> (16 - SignFlag)) & SignFlag;
+   flags |= (result == 0) ? ZeroFlag : 0;
+
+   Out << "; ";
+
+   sim86_check_ip(Out);
+
+   sim86_check_flags(flags, Out);
+}
+
 void sim86_cmp_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
 {
    u16 result = Registers[Dst] - Registers[Src];
@@ -282,6 +335,79 @@ void sim86_cmp_reg_word(u16 Dst, u16 Src, std::ofstream& Out)
    Out << "; ";
 
    sim86_check_flags(flags, Out);
+}
+
+void sim86_store_word(u16 Address, u16 Data, std::ofstream& Out)
+{
+   Memory[Address] = Data;
+
+   Out << " ;";
+
+   sim86_check_ip(Out);
+}
+
+void sim86_store_word(u16 Dst, u16 Address, u16 Data, std::ofstream& Out)
+{
+   u16 address = Registers[Dst] + Address;
+   Memory[address] = Data;
+
+   Out << " ;";
+
+   sim86_check_ip(Out);
+}
+
+void sim86_store_word_from_reg(u16 Dst, u16 Address, u16 Src, std::ofstream& Out)
+{
+   u16 address = Registers[Dst] + Address;
+   Memory[address] = Registers[Src];
+
+   Out << " ;";
+
+   sim86_check_ip(Out);
+}
+
+void sim86_store_word_ea(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   u16 address = 0;
+
+   if (Dst == EA_Regs_bp_si)
+      address = Registers[Reg_bp] + Registers[Reg_si];
+
+   Memory[address] = Registers[Src];
+
+   Out << " ;";
+
+   sim86_check_ip(Out);
+}
+
+void sim86_load_word(u16 Dst, u16 Address, std::ofstream& Out)
+{
+   u16 result = Memory[Address];
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst]
+       << "->0x" << result << std::dec;
+
+   sim86_check_ip(Out);
+
+   Registers[Dst] = result;
+}
+
+void sim86_load_word_ea(u16 Dst, u16 Src, std::ofstream& Out)
+{
+   u16 address = 0;
+
+   if (Src == EA_Regs_bp_si)
+      address = Registers[Reg_bp] + Registers[Reg_si];
+
+   Out << "; " << RegisterTable[1][Dst]
+       << std::hex << ":0x" << Registers[Dst];
+
+   Registers[Dst] = Memory[address];
+
+   Out << "->0x" << Registers[Dst] << std::dec;
+
+   sim86_check_ip(Out);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -308,11 +434,38 @@ uint32_t decode_register_to_register(u8 Opcode, const char* Command, char* Buffe
       }
 
       if (direct_address)
-         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << direct_address << "]" << std::endl;
+      {
+         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << direct_address << "]";
+
+         if (Opcode == INTEL_REG_MOV_OPCODE && execute && opcode.Word)
+         {
+            sim86_load_word(reg.Reg, direct_address, out);
+         }
+
+         out << std::endl;
+      }
       else if (opcode.Destination)
-         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << EffectiveAddressTable[reg.Rm] << "]" << std::endl;
+      {
+         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << "[" << EffectiveAddressTable[reg.Rm] << "]";
+
+         if (Opcode == INTEL_REG_MOV_OPCODE && execute && opcode.Word)
+         {
+            sim86_load_word_ea(reg.Reg, reg.Rm, out);
+         }
+
+         out << std::endl;
+      }
       else
-         out << Command << " " << "[" << EffectiveAddressTable[reg.Rm] << "], " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+      {
+         out << Command << " " << "[" << EffectiveAddressTable[reg.Rm] << "], " << RegisterTable[opcode.Word][reg.Reg];
+
+         if (Opcode == INTEL_REG_MOV_OPCODE && execute && opcode.Word)
+         {
+            sim86_store_word_ea(reg.Rm, reg.Reg, out);
+         }
+
+         out << std::endl;
+      }
    }
    else if (reg.Mode == 1)
    {
@@ -334,9 +487,37 @@ uint32_t decode_register_to_register(u8 Opcode, const char* Command, char* Buffe
          effective_address += "]";
 
       if (opcode.Destination)
-         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << effective_address << std::endl;
+      {
+         out << Command << " " << RegisterTable[opcode.Word][reg.Reg] << ", " << effective_address;
+
+         if (Opcode == INTEL_REG_MOV_OPCODE && execute && opcode.Word)
+         {
+            u16 temp_reg = 0;
+
+            if (reg.Rm == EA_Reg_bp)
+               temp_reg = Reg_bp;
+
+            //sim86_store_word(temp_reg, displacement, 
+         }
+
+         out << std::endl;
+      }
       else
-         out << Command << " " << effective_address << ", " << RegisterTable[opcode.Word][reg.Reg] << std::endl;
+      {
+         out << Command << " " << effective_address << ", " << RegisterTable[opcode.Word][reg.Reg];
+
+         if (Opcode == INTEL_REG_MOV_OPCODE && execute && opcode.Word)
+         {
+            u16 temp_reg = 0;
+
+            if (reg.Rm == EA_Reg_bp)
+               temp_reg = Reg_bp;
+
+            sim86_store_word_from_reg(temp_reg, displacement, reg.Reg, out);
+         }
+
+         out << std::endl;
+      }
    }
    else if (reg.Mode == 2)
    {
@@ -378,6 +559,13 @@ uint32_t decode_register_to_register(u8 Opcode, const char* Command, char* Buffe
                sim86_move_reg_word(reg.Reg, reg.Rm, out);
             else
                sim86_move_reg_word(reg.Rm, reg.Reg, out);
+         }
+         else if (Opcode == INTEL_REG_ADD_OPCODE && opcode.Word)
+         {
+            if (opcode.Destination)
+               sim86_add_reg_word(reg.Reg, reg.Rm, out);
+            else
+               sim86_add_reg_word(reg.Rm, reg.Reg, out);
          }
          else if (Opcode == INTEL_REG_SUB_OPCODE && opcode.Word)
          {
@@ -480,6 +668,10 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, u16& In
          {
             sim86_sub_word(reg.Rm, signed_data, out);
          }
+         else if (cmp_cmd && word)
+         {
+            sim86_cmp_word(reg.Rm, signed_data, out);
+         }
       }
 
       out << std::endl;
@@ -503,7 +695,29 @@ uint32_t decode_immediate_to_register(const char* Command, char* Buffer, u16& In
             effective_address += "]";
       }
 
-      out << Command << " " << effective_address << ", " << explicit_size << " " << data << std::endl;
+      out << Command << " " << effective_address << ", " << explicit_size << " " << data;
+
+      if (mov_cmd && execute)
+      {
+         if (reg.Mode == 0 && reg.Rm == 6) // direct address
+            sim86_store_word(displacement, data, out);
+         else
+         { 
+            u16 temp_reg = 0;
+
+            if (reg.Rm == 7)
+               temp_reg = 3;
+            else if (reg.Rm == EA_Reg_bp)
+               temp_reg = Reg_bp;
+            else if (reg.Rm == 5)
+               temp_reg = 7;
+            else if (reg.Rm == 4)
+               temp_reg = 6;
+            sim86_store_word(temp_reg, displacement, data, out);
+         }
+      }
+
+      out << std::endl;
    }
 
    return i;
@@ -525,7 +739,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
       }
       else if ((Buffer[i] & 0xfc) == INTEL_REG_ADD_OPCODE)
       {
-         i = decode_register_to_register(INTEL_REG_ADD_OPCODE, "add", Buffer, i, out);
+         i = decode_register_to_register(INTEL_REG_ADD_OPCODE, "add", Buffer, i, out, execute);
       }
       else if ((Buffer[i] & 0xfc) == INTEL_IMM_TO_REGMEM_OPCODE)
       {
@@ -536,7 +750,7 @@ void intel_decode(char* Buffer, uint32_t BufferSize, std::ofstream& out, bool ex
          else if (reg == 5) // sub
             i = decode_immediate_to_register("sub", Buffer, i, out, execute);
          else if (reg == 7) // cmp
-            i = decode_immediate_to_register("cmp", Buffer, i, out);
+            i = decode_immediate_to_register("cmp", Buffer, i, out, execute);
          else
             return;
       }
@@ -841,18 +1055,25 @@ int main(int argc, char* argv[])
    bool          execute = false;
    std::ifstream input_file;
    std::ofstream output_file("output.asm");
+   std::ofstream dump_file;
 
-   if (argc != 2 && argc != 3)
+   if (argc < 2 || argc > 4)
    {
-      std::cout << "Usage: main [-exec] <assembly-file>" << std::endl;
+      std::cout << "Usage: main [-dump] [-exec] <assembly-file>" << std::endl;
       return 0;
    }
 
    if (argc == 2)
       input_file.open(argv[1], std::ios::binary);
-   else
+   else if (argc == 3)
    {
       input_file.open(argv[2], std::ios::binary);
+      execute = true;
+   }
+   else if (argc == 4)
+   {
+      input_file.open(argv[3], std::ios::binary);
+      dump_file.open("dump.data", std::ios::binary);
       execute = true;
    }
 
@@ -908,6 +1129,12 @@ int main(int argc, char* argv[])
 
    input_file.close();
    output_file.close();
+
+   if (dump_file.is_open())
+   {
+      dump_file.write((char*)Memory, MEMORY_SIZE);
+      dump_file.close();
+   }
 
    return 1;
 }

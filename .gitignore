@@ -2,3 +2,4 @@
 *.o
 part1/main
 part1/output*
+part1/dump.data
