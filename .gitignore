@@ -3,3 +3,6 @@
 part1/main
 part1/output*
 part1/dump.data
+part2/haversine_points.json
+part2/haversine_distances.bin
+part2/haversine_generator
