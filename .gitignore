@@ -1,5 +1,7 @@
 .vscode/
 *.o
+*.json
+*.f64
 part1/main
 part1/output*
 part1/dump.data
@@ -7,3 +9,8 @@ part2/haversine_points.json
 part2/haversine_distances.bin
 part2/haversine_generator
 part2/haversine_processor
+part2/listing_0066_haversine_generator_main
+part2/listing_0067_simple_haversine_main
+part2/listing_0071_os_timer_main
+part2/listing_0072_cpu_timer_main
+part2/listing_0073_cpu_timer_guessfreq_main
