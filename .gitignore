@@ -14,3 +14,5 @@ part2/listing_0067_simple_haversine_main
 part2/listing_0071_os_timer_main
 part2/listing_0072_cpu_timer_main
 part2/listing_0073_cpu_timer_guessfreq_main
+part2/listing_0078_profiled_haversine_main
+part2/listing_0080_double_counted_haversine_main
