@@ -9,11 +9,4 @@ part2/haversine_points.json
 part2/haversine_distances.bin
 part2/haversine_generator
 part2/haversine_processor
-part2/listing_0066_haversine_generator_main
-part2/listing_0067_simple_haversine_main
-part2/listing_0071_os_timer_main
-part2/listing_0072_cpu_timer_main
-part2/listing_0073_cpu_timer_guessfreq_main
-part2/listing_0078_profiled_haversine_main
-part2/listing_0080_double_counted_haversine_main
-part2/listing_0084_recursive_timed_haversine_main
+part2/*_main
