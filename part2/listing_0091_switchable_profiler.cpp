@@ -27,6 +27,7 @@ struct profile_anchor
     u64 TSCElapsedExclusive; // NOTE(casey): Does NOT include children
     u64 TSCElapsedInclusive; // NOTE(casey): DOES include children
     u64 HitCount;
+    u64 ProcessedByteCount;
     char const *Label;
 };
 static profile_anchor GlobalProfilerAnchors[4096];
@@ -34,7 +35,7 @@ static u32 GlobalProfilerParent;
 
 struct profile_block
 {
-    profile_block(char const *Label_, u32 AnchorIndex_)
+    profile_block(char const *Label_, u32 AnchorIndex_, u64 ByteCount)
     {
         ParentIndex = GlobalProfilerParent;
         
@@ -43,6 +44,7 @@ struct profile_block
 
         profile_anchor *Anchor = GlobalProfilerAnchors + AnchorIndex;
         OldTSCElapsedInclusive = Anchor->TSCElapsedInclusive;
+        Anchor->ProcessedByteCount += ByteCount;
         
         GlobalProfilerParent = AnchorIndex;
         StartTSC = ReadCPUTimer();
@@ -77,10 +79,10 @@ struct profile_block
 
 #define NameConcat2(A, B) A##B
 #define NameConcat(A, B) NameConcat2(A, B)
-#define TimeBlock(Name) profile_block NameConcat(Block, __LINE__)(Name, __COUNTER__ + 1);
+#define TimeBandwidth(Name, ByteCount) profile_block NameConcat(Block, __LINE__)(Name, __COUNTER__ + 1, ByteCount)
 #define ProfilerEndOfCompilationUnit static_assert(__COUNTER__ < ArrayCount(GlobalProfilerAnchors), "Number of profile points exceeds size of profiler::Anchors array")
 
-static void PrintTimeElapsed(u64 TotalTSCElapsed, profile_anchor *Anchor)
+static void PrintTimeElapsed(u64 TotalTSCElapsed, u64 TimerFreq, profile_anchor *Anchor)
 {
     f64 Percent = 100.0 * ((f64)Anchor->TSCElapsedExclusive / (f64)TotalTSCElapsed);
     printf("  %s[%llu]: %llu (%.2f%%", Anchor->Label, Anchor->HitCount, Anchor->TSCElapsedExclusive, Percent);
@@ -89,24 +91,38 @@ static void PrintTimeElapsed(u64 TotalTSCElapsed, profile_anchor *Anchor)
         f64 PercentWithChildren = 100.0 * ((f64)Anchor->TSCElapsedInclusive / (f64)TotalTSCElapsed);
         printf(", %.2f%% w/children", PercentWithChildren);
     }
-    printf(")\n");
+    printf(")");
+
+    if (Anchor->ProcessedByteCount)
+    {
+        f64 Megabyte = 1024.0f*1024.0f;
+        f64 Gigabyte = Megabyte*1024.0f;
+
+        f64 Seconds = (f64)Anchor->TSCElapsedInclusive / (f64)TimerFreq;
+        f64 BytesPerSecond = (f64)Anchor->ProcessedByteCount / Seconds;
+        f64 Megabytes = (f64)Anchor->ProcessedByteCount / (f64)Megabyte;
+        f64 GigabytesPerSecond = BytesPerSecond / Gigabyte;
+
+        printf("  %.3fmb at %.2fgb/s", Megabytes, GigabytesPerSecond);
+    }
+    printf("\n");
 }
 
-static void PrintAnchorData(u64 TotalCPUElapsed)
+static void PrintAnchorData(u64 TotalCPUElapsed, u64 TimerFreq)
 {
     for(u32 AnchorIndex = 0; AnchorIndex < ArrayCount(GlobalProfilerAnchors); ++AnchorIndex)
     {
         profile_anchor *Anchor = GlobalProfilerAnchors + AnchorIndex;
         if(Anchor->TSCElapsedInclusive)
         {
-            PrintTimeElapsed(TotalCPUElapsed, Anchor);
+            PrintTimeElapsed(TotalCPUElapsed, TimerFreq, Anchor);
         }
     }
 }
 
 #else
 
-#define TimeBlock(...)
+#define TimeBandwidth(...)
 #define PrintAnchorData(...)
 #define ProfilerEndOfCompilationUnit
 
@@ -119,6 +135,7 @@ struct profiler
 };
 static profiler GlobalProfiler;
 
+#define TimeBlock(Name) TimeBandwidth(Name, 0)
 #define TimeFunction TimeBlock(__func__)
 
 static void BeginProfile(void)
@@ -138,5 +155,5 @@ static void EndAndPrintProfile()
         printf("\nTotal time: %0.4fms (CPU freq %llu)\n", 1000.0 * (f64)TotalCPUElapsed / (f64)CPUFreq, CPUFreq);
     }
     
-    PrintAnchorData(TotalCPUElapsed);
+    PrintAnchorData(TotalCPUElapsed, CPUFreq);
 }

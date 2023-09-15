@@ -73,6 +73,7 @@ static buffer ReadEntireFile(char *FileName)
         Result = AllocateBuffer(Stat.st_size);
         if(Result.Data)
         {
+            TimeBandwidth("fread", Result.Count);
             if(fread(Result.Data, Result.Count, 1, File) != 1)
             {
                 fprintf(stderr, "ERROR: Unable to read \"%s\".\n", FileName);
@@ -90,7 +91,7 @@ static buffer ReadEntireFile(char *FileName)
 
 static f64 SumHaversineDistances(u64 PairCount, haversine_pair *Pairs)
 {
-    TimeFunction;
+    TimeBandwidth(__func__, PairCount*sizeof(haversine_pair));
     
     f64 Sum = 0;
     
