@@ -187,6 +187,7 @@ static b32 IsTesting(repetition_tester* Tester)
                {
                   PrintTime("Min", Results->MinTime, Tester->CPUTimerFreq, Tester->BytesAccumulatedOnThisTest);
                   printf("               \r");
+                  fflush(stdout);
                }
             }
 
