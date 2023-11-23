@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 115
+   LISTING 130
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -40,36 +40,15 @@ typedef double f64;
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof((Array)[0]))
 
-#include "listing_0068_buffer.cpp"
-#include "listing_0108_platform_metrics.cpp"
+#include "listing_0125_buffer.cpp"
+#include "listing_0126_os_platform.cpp"
 #include "listing_0109_pagefault_repetition_tester.cpp"
-#include "listing_0106_mallocread_overhead_test.cpp"
-#include "listing_0110_pagefault_overhead_test.cpp"
-#include "listing_0114_pagefault_backward_test.cpp"
-
-struct test_function
-{
-    char const *Name;
-    read_overhead_test_func *Func;
-};
-test_function TestFunctions[] =
-{
-    {"WriteToAllBytes", WriteToAllBytes},
-    {"WriteToAllBytesBackward", WriteToAllBytesBackward},
-};
+#include "listing_0127_largepageread_overhead_test.cpp"
+#include "listing_0129_memory_mapped_file_test.cpp"
 
 int main(int ArgCount, char **Args)
 {
-    // NOTE(casey): Since we do not use these functions in this particular build, we reference their pointers
-    // here to prevent the compiler from complaining about "unused functions".
-    (void)&IsInBounds;
-    (void)&AreEqual;
-    (void)&ReadViaFRead;
-    (void)&ReadViaRead;
-    (void)&ReadViaReadFile;
-
-    InitializeOSMetrics();
-    u64 CPUTimerFreq = EstimateCPUTimerFreq();
+    InitializeOSPlatform();
     
     if(ArgCount == 2)
     {
@@ -88,32 +67,31 @@ int main(int ArgCount, char **Args)
     
         if(Params.Dest.Count > 0)
         {
-            repetition_tester Testers[ArrayCount(TestFunctions)][AllocType_Count] = {};
+            repetition_tester MVOFTester = {};
+            repetition_tester Testers[AllocType_Count] = {};
             
             for(;;)
             {
-                for(u32 FuncIndex = 0; FuncIndex < ArrayCount(TestFunctions); ++FuncIndex)
+                printf("\n--- MapViewOfFile ---\n");
+                NewTestWave(&MVOFTester, Params.Dest.Count, GetCPUTimerFreq());
+                ReadViaMapViewOfFile(&MVOFTester, &Params);
+                
+                for(u32 AllocType = 0; AllocType < AllocType_Count; ++AllocType)
                 {
-                    for(u32 AllocType = 0; AllocType < AllocType_Count; ++AllocType)
-                    {
-                        Params.AllocType = (allocation_type)AllocType;
-                        
-                        repetition_tester *Tester = &Testers[FuncIndex][AllocType];
-                        test_function TestFunc = TestFunctions[FuncIndex];
-                        
-                        printf("\n--- %s%s%s ---\n",
-                               DescribeAllocationType(Params.AllocType),
-                               Params.AllocType ? " + " : "",
-                               TestFunc.Name);
-                        NewTestWave(Tester, Params.Dest.Count, CPUTimerFreq);
-                        TestFunc.Func(Tester, &Params);
-                    }
+                    Params.AllocType = (allocation_type)AllocType;
+                    
+                    repetition_tester *Tester = &Testers[AllocType];
+                    
+                    printf("\n--- %s%sReadFile ---\n",
+                           DescribeAllocationType(Params.AllocType),
+                           Params.AllocType ? " + " : "");
+                    NewTestWave(Tester, Params.Dest.Count, GetCPUTimerFreq());
+                    ReadViaReadFile(Tester, &Params);
                 }
             }
             
             // NOTE(casey): We would normally call this here, but we can't because the compiler will complain about "unreachable code".
-            // So instead we just reference the pointer to prevent the compiler complaining about unused function :(
-            (void)&FreeBuffer;
+            // FreeBuffer(&Params.Dest);
         }
         else
         {
@@ -124,6 +102,10 @@ int main(int ArgCount, char **Args)
     {
         fprintf(stderr, "Usage: %s [existing filename]\n", Args[0]);
     }
+    
+    // NOTE(casey): These read methods are not used by this test
+    (void)&ReadViaRead;
+	(void)&ReadViaFRead;
 		
     return 0;
 }
