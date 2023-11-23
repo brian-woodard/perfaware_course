@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 115
+   LISTING 128
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -40,12 +40,10 @@ typedef double f64;
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof((Array)[0]))
 
-#include "listing_0068_buffer.cpp"
-#include "listing_0108_platform_metrics.cpp"
+#include "listing_0125_buffer.cpp"
+#include "listing_0126_os_platform.cpp"
 #include "listing_0109_pagefault_repetition_tester.cpp"
-#include "listing_0106_mallocread_overhead_test.cpp"
-#include "listing_0110_pagefault_overhead_test.cpp"
-#include "listing_0114_pagefault_backward_test.cpp"
+#include "listing_0127_largepageread_overhead_test.cpp"
 
 struct test_function
 {
@@ -54,22 +52,14 @@ struct test_function
 };
 test_function TestFunctions[] =
 {
-    {"WriteToAllBytes", WriteToAllBytes},
-    {"WriteToAllBytesBackward", WriteToAllBytesBackward},
+    {"fread", ReadViaFRead},
+    {"_read", ReadViaRead},
+    {"ReadFile", ReadViaReadFile},
 };
 
 int main(int ArgCount, char **Args)
 {
-    // NOTE(casey): Since we do not use these functions in this particular build, we reference their pointers
-    // here to prevent the compiler from complaining about "unused functions".
-    (void)&IsInBounds;
-    (void)&AreEqual;
-    (void)&ReadViaFRead;
-    (void)&ReadViaRead;
-    (void)&ReadViaReadFile;
-
-    InitializeOSMetrics();
-    u64 CPUTimerFreq = EstimateCPUTimerFreq();
+    InitializeOSPlatform();
     
     if(ArgCount == 2)
     {
@@ -105,15 +95,14 @@ int main(int ArgCount, char **Args)
                                DescribeAllocationType(Params.AllocType),
                                Params.AllocType ? " + " : "",
                                TestFunc.Name);
-                        NewTestWave(Tester, Params.Dest.Count, CPUTimerFreq);
+                        NewTestWave(Tester, Params.Dest.Count, GetCPUTimerFreq());
                         TestFunc.Func(Tester, &Params);
                     }
                 }
             }
             
             // NOTE(casey): We would normally call this here, but we can't because the compiler will complain about "unreachable code".
-            // So instead we just reference the pointer to prevent the compiler complaining about unused function :(
-            (void)&FreeBuffer;
+            // FreeBuffer(&Params.Dest);
         }
         else
         {

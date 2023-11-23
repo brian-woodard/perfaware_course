@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 112
+   LISTING 120
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -27,6 +27,7 @@
 #include <stdint.h>
 
 typedef uint8_t u8;
+typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
@@ -38,12 +39,17 @@ typedef double f64;
 #define ArrayCount(Array) (sizeof(Array)/sizeof((Array)[0]))
 
 #include "listing_0108_platform_metrics.cpp"
+#include "listing_0117_virtual_address.cpp"
 
 int main(int ArgCount, char **Args)
 {
     // NOTE(casey): Since we do not use these functions in this particular build, we reference their pointers
     // here to prevent the compiler from complaining about "unused functions".
     (void)&EstimateCPUTimerFreq;
+    (void)&DecomposePointer2MB;
+    (void)&DecomposePointer1GB;
+    (void)&Print;
+    (void)&PrintAsLine;
     
     InitializeOSMetrics();
     
@@ -53,7 +59,7 @@ int main(int ArgCount, char **Args)
         u64 PageCount = atol(Args[1]);
         u64 TotalSize = PageSize*PageCount;
         
-        printf("Page Count, Touch Count, Fault Count, Extra Faults\n");
+        printf("Page Count, Touch Count, Fault Count, Extra Faults, Directory Index, Table index\n");
         
         for(u64 TouchCount = 0; TouchCount <= PageCount; ++TouchCount)
         {
@@ -70,7 +76,14 @@ int main(int ArgCount, char **Args)
                 
                 u64 FaultCount = EndFaultCount - StartFaultCount;
                 
-                printf("%llu, %llu, %llu, %lld\n", PageCount, TouchCount, FaultCount, (FaultCount - TouchCount));
+                decomposed_virtual_address Address = DecomposePointer4K(Data);
+                if(TouchSize)
+                {
+                    Address = DecomposePointer4K(Data + TouchSize - 1);
+                }
+                
+                printf("%llu, %llu, %llu, %lld, %u, %u\n", PageCount, TouchCount, FaultCount, (FaultCount - TouchCount),
+                       Address.DirectoryIndex, Address.TableIndex);
                 
                 VirtualFree(Data, 0, MEM_RELEASE);
             }

@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 115
+   LISTING 133
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -40,12 +40,11 @@ typedef double f64;
 
 #define ArrayCount(Array) (sizeof(Array)/sizeof((Array)[0]))
 
-#include "listing_0068_buffer.cpp"
-#include "listing_0108_platform_metrics.cpp"
+#include "listing_0125_buffer.cpp"
+#include "listing_0126_os_platform.cpp"
 #include "listing_0109_pagefault_repetition_tester.cpp"
-#include "listing_0106_mallocread_overhead_test.cpp"
-#include "listing_0110_pagefault_overhead_test.cpp"
-#include "listing_0114_pagefault_backward_test.cpp"
+#include "listing_0127_largepageread_overhead_test.cpp"
+#include "listing_0131_front_end_test.cpp"
 
 struct test_function
 {
@@ -55,21 +54,15 @@ struct test_function
 test_function TestFunctions[] =
 {
     {"WriteToAllBytes", WriteToAllBytes},
-    {"WriteToAllBytesBackward", WriteToAllBytesBackward},
+    {"MOVAllBytes", MOVAllBytes},
+    {"NOPAllBytes", NOPAllBytes},
+    {"CMPAllBytes", CMPAllBytes},
+    {"DECAllBytes", DECAllBytes},
 };
 
 int main(int ArgCount, char **Args)
 {
-    // NOTE(casey): Since we do not use these functions in this particular build, we reference their pointers
-    // here to prevent the compiler from complaining about "unused functions".
-    (void)&IsInBounds;
-    (void)&AreEqual;
-    (void)&ReadViaFRead;
-    (void)&ReadViaRead;
-    (void)&ReadViaReadFile;
-
-    InitializeOSMetrics();
-    u64 CPUTimerFreq = EstimateCPUTimerFreq();
+    InitializeOSPlatform();
     
     if(ArgCount == 2)
     {
@@ -88,26 +81,18 @@ int main(int ArgCount, char **Args)
     
         if(Params.Dest.Count > 0)
         {
-            repetition_tester Testers[ArrayCount(TestFunctions)][AllocType_Count] = {};
+            repetition_tester Testers[ArrayCount(TestFunctions)] = {};
             
             for(;;)
             {
                 for(u32 FuncIndex = 0; FuncIndex < ArrayCount(TestFunctions); ++FuncIndex)
                 {
-                    for(u32 AllocType = 0; AllocType < AllocType_Count; ++AllocType)
-                    {
-                        Params.AllocType = (allocation_type)AllocType;
-                        
-                        repetition_tester *Tester = &Testers[FuncIndex][AllocType];
-                        test_function TestFunc = TestFunctions[FuncIndex];
-                        
-                        printf("\n--- %s%s%s ---\n",
-                               DescribeAllocationType(Params.AllocType),
-                               Params.AllocType ? " + " : "",
-                               TestFunc.Name);
-                        NewTestWave(Tester, Params.Dest.Count, CPUTimerFreq);
-                        TestFunc.Func(Tester, &Params);
-                    }
+                    repetition_tester *Tester = &Testers[FuncIndex];
+                    test_function TestFunc = TestFunctions[FuncIndex];
+                    
+                    printf("\n--- %s ---\n", TestFunc.Name);
+                    NewTestWave(Tester, Params.Dest.Count, GetCPUTimerFreq());
+                    TestFunc.Func(Tester, &Params);
                 }
             }
             
@@ -124,6 +109,12 @@ int main(int ArgCount, char **Args)
     {
         fprintf(stderr, "Usage: %s [existing filename]\n", Args[0]);
     }
-		
+
+    // NOTE(casey): We don't use these functions
+    (void)&DescribeAllocationType;
+    (void)&ReadViaFRead;
+    (void)&ReadViaRead;
+    (void)&ReadViaReadFile;
+
     return 0;
 }

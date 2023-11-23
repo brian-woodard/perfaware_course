@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 112
+   LISTING 116
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -39,7 +39,7 @@ typedef double f64;
 
 #include "listing_0108_platform_metrics.cpp"
 
-int main(int ArgCount, char **Args)
+int main(void)
 {
     // NOTE(casey): Since we do not use these functions in this particular build, we reference their pointers
     // here to prevent the compiler from complaining about "unused functions".
@@ -47,43 +47,39 @@ int main(int ArgCount, char **Args)
     
     InitializeOSMetrics();
     
-    if(ArgCount == 2)
+    u64 PageSize = 4096; // NOTE(casey): This may not be the OS page size! It is merely our testing page size.
+    u64 PageCount = 16384;
+    u64 TotalSize = PageCount*PageSize;
+    
+    u8 *Data = (u8 *)VirtualAlloc(0, TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    if(Data)
     {
-        u64 PageSize = 4096; // NOTE(casey): This may not be the OS page size! It is merely our testing page size.
-        u64 PageCount = atol(Args[1]);
-        u64 TotalSize = PageSize*PageCount;
+        u64 StartFaultCount = ReadOSPageFaultCount();
         
-        printf("Page Count, Touch Count, Fault Count, Extra Faults\n");
-        
-        for(u64 TouchCount = 0; TouchCount <= PageCount; ++TouchCount)
+        u64 PriorOverFaultCount = 0;
+        u64 PriorPageIndex = 0;
+        for(u64 PageIndex = 0; PageIndex < PageCount; ++PageIndex)
         {
-            u64 TouchSize = PageSize*TouchCount;
-            u8 *Data = (u8 *)VirtualAlloc(0, TotalSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-            if(Data)
+            Data[TotalSize - 1 - PageSize*PageIndex] = (u8)PageIndex;
+            u64 EndFaultCount = ReadOSPageFaultCount();
+            
+            u64 OverFaultCount = (EndFaultCount - StartFaultCount) - PageIndex;
+            if(OverFaultCount > PriorOverFaultCount)
             {
-                u64 StartFaultCount = ReadOSPageFaultCount();
-                for(u64 Index = 0; Index < TouchSize; ++Index)
-                {
-                    Data[Index] = (u8)Index;
-                }
-                u64 EndFaultCount = ReadOSPageFaultCount();
+                printf("Page %llu: %llu extra faults (%llu pages since last increase)\n",
+                       PageIndex, OverFaultCount, (PageIndex - PriorPageIndex));
                 
-                u64 FaultCount = EndFaultCount - StartFaultCount;
-                
-                printf("%llu, %llu, %llu, %lld\n", PageCount, TouchCount, FaultCount, (FaultCount - TouchCount));
-                
-                VirtualFree(Data, 0, MEM_RELEASE);
-            }
-            else
-            {
-                fprintf(stderr, "ERROR: Unable to allocate memory\n");
+                PriorOverFaultCount = OverFaultCount;
+                PriorPageIndex = PageIndex;
             }
         }
+        
+        VirtualFree(Data, 0, MEM_RELEASE);
     }
     else
     {
-        fprintf(stderr, "Usage: %s [# of 4k pages to allocate]\n", Args[0]);
+        fprintf(stderr, "ERROR: Unable to allocate memory\n");
     }
-		
+    
     return 0;
 }
