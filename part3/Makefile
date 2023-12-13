@@ -9,6 +9,10 @@ all:
 	gcc -c listing_0134_multinop_loops_linux.s
 	#nasm -f elf64 listing_0134_multinop_loops_linux.asm
 	g++ $(CPPFLAGS) listing_0135_multinop_loops_main.cpp -o listing_0135_multinop_loops_main listing_0134_multinop_loops_linux.o
+	gcc -c listing_0136_conditional_nop_loops_linux.s
+	#nasm -f elf64 listing_0136_conditional_nop_loops_linux.asm
+	g++ $(CPPFLAGS) listing_0138_conditional_nop_loops_main.cpp -o listing_0138_conditional_nop_loops_main listing_0136_conditional_nop_loops_linux.o
+
 
 clean:
 	rm -f *.o
