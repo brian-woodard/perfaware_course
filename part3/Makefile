@@ -13,8 +13,10 @@ all:
 	##nasm -f elf64 listing_0136_conditional_nop_loops_linux.asm
 	#g++ $(CPPFLAGS) listing_0138_conditional_nop_loops_main.cpp -o listing_0138_conditional_nop_loops_main listing_0136_conditional_nop_loops_linux.o
 	#gcc -c listing_0139_jump_alignment_linux.s
-	nasm -f elf64 listing_0139_jump_alignment_linux.asm
-	g++ $(CPPFLAGS) listing_0140_jump_alignment_main.cpp -o listing_0140_jump_alignment_main listing_0139_jump_alignment_linux.o
+	#nasm -f elf64 listing_0139_jump_alignment_linux.asm
+	#g++ $(CPPFLAGS) listing_0140_jump_alignment_main.cpp -o listing_0140_jump_alignment_main listing_0139_jump_alignment_linux.o
+	nasm -f elf64 listing_0141_rat_linux.asm
+	g++ $(CPPFLAGS) listing_0142_rat_main.cpp -o listing_0142_rat_main listing_0141_rat_linux.o
 
 
 clean:
