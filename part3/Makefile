@@ -1,6 +1,6 @@
-CPPFLAGS = --std=c++17 -Wall -I. -O1 -Wno-format
+#CPPFLAGS = --std=c++17 -Wall -I. -O1 -Wno-format
 #CPPFLAGS = --std=c++17 -Wall -I. -O3 -Wno-format
-#CPPFLAGS = --std=c++17 -Wall -I. -g -Wno-format
+CPPFLAGS = --std=c++17 -Wall -I. -g -Wno-format
 
 all:
 	#gcc -c listing_0132_nop_loop_linux.s
@@ -15,8 +15,10 @@ all:
 	#gcc -c listing_0139_jump_alignment_linux.s
 	#nasm -f elf64 listing_0139_jump_alignment_linux.asm
 	#g++ $(CPPFLAGS) listing_0140_jump_alignment_main.cpp -o listing_0140_jump_alignment_main listing_0139_jump_alignment_linux.o
-	nasm -f elf64 listing_0141_rat_linux.asm
-	g++ $(CPPFLAGS) listing_0142_rat_main.cpp -o listing_0142_rat_main listing_0141_rat_linux.o
+	#nasm -f elf64 listing_0141_rat_linux.asm
+	#g++ $(CPPFLAGS) listing_0142_rat_main.cpp -o listing_0142_rat_main listing_0141_rat_linux.o
+	nasm -f elf64 listing_0144_read_unroll.asm
+	g++ $(CPPFLAGS) listing_0145_read_unroll_main.cpp -o listing_0145_read_unroll_main listing_0144_read_unroll.o
 
 
 clean:
