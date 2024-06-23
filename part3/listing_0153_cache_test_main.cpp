@@ -11,7 +11,7 @@
    ======================================================================== */
 
 /* ========================================================================
-   LISTING 151
+   LISTING 153
    ======================================================================== */
 
 /* NOTE(casey): _CRT_SECURE_NO_WARNINGS is here because otherwise we cannot
@@ -44,15 +44,10 @@ typedef double f64;
 #include "listing_0137_os_platform.cpp"
 #include "listing_0109_pagefault_repetition_tester.cpp"
 
-typedef void ASMFunction(u64 Count, u8 *Data);
+typedef void ASMFunction(u64 Count, u8 *Data, u64 Mask);
 
-extern "C" void Read_4x2(u64 Count, u8 *Data);
-extern "C" void Read_8x2(u64 Count, u8 *Data);
-extern "C" void Read_16x2(u64 Count, u8 *Data);
-extern "C" void Read_32x2(u64 Count, u8 *Data);
-extern "C" void Read_32x3(u64 Count, u8 *Data);
-extern "C" void Read_32x4(u64 Count, u8 *Data);
-#pragma comment (lib, "listing_0150_read_widths")
+extern "C" void Test_Cache(u64 Count, u8 *Data, u64 Mask);
+#pragma comment (lib, "listing_0152_cache_test")
 
 struct test_function
 {
@@ -61,10 +56,7 @@ struct test_function
 };
 test_function TestFunctions[] =
 {
-    {"Read_4x2", Read_4x2},
-    {"Read_8x2", Read_8x2},
-    {"Read_16x2", Read_16x2},
-    {"Read_32x4", Read_32x4},
+    {"Test_Cache", Test_Cache},
 };
 
 int main(void)
@@ -72,6 +64,10 @@ int main(void)
     InitializeOSPlatform();
     
     buffer Buffer = AllocateBuffer(1*1024*1024*1024);
+    //u64 Mask = 0x7FFF;           // 32 KB - 185gb/s (L1 cache size)
+    //u64 Mask = 0xFFFFF;          //  1 MB - 130gb/s (L2 cache size)
+    //u64 Mask = 0xFFFFFF;         // 16 MB -  45gb/s (L3 cache size)
+    u64 Mask = 0xFFFFFFFFFFFFFFFF; //  1 GB -  20gb/s (main memory)
     if(IsValid(Buffer))
     {
         repetition_tester Testers[ArrayCount(TestFunctions)] = {};
@@ -88,7 +84,7 @@ int main(void)
                 while(IsTesting(Tester))
                 {
                     BeginTime(Tester);
-                    TestFunc.Func(Buffer.Count, Buffer.Data);
+                    TestFunc.Func(Buffer.Count, Buffer.Data, Mask);
                     EndTime(Tester);
                     CountBytes(Tester, Buffer.Count);
                 }
