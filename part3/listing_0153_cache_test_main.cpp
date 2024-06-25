@@ -64,10 +64,10 @@ int main(void)
     InitializeOSPlatform();
     
     buffer Buffer = AllocateBuffer(1*1024*1024*1024);
-    //u64 Mask = 0x7FFF;           // 32 KB - 185gb/s (L1 cache size)
-    //u64 Mask = 0xFFFFF;          //  1 MB - 130gb/s (L2 cache size)
-    //u64 Mask = 0xFFFFFF;         // 16 MB -  45gb/s (L3 cache size)
-    u64 Mask = 0xFFFFFFFFFFFFFFFF; //  1 GB -  20gb/s (main memory)
+    u64 Mask = 0x7FFF;             // 32 KB - 185gb/s (L1 cache size)
+    //u64 Mask = 0xFFFFF;            //  1 MB - 130gb/s (L2 cache size)
+    //u64 Mask = 0xFFFFFF;           // 16 MB -  45gb/s (L3 cache size)
+    //u64 Mask = 0xFFFFFFFFFFFFFFFF; //  1 GB -  20gb/s (main memory)
     if(IsValid(Buffer))
     {
         repetition_tester Testers[ArrayCount(TestFunctions)] = {};
