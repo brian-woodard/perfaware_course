@@ -33,17 +33,25 @@ Test_Cache:
     xor rax, rax
     xor r10, r10
     mov r11, rdx
-	align 64
+    align 64
+
 .loop:
     vmovdqu ymm0, [r11]
-    vmovdqu ymm1, [r11 + 32]
-    vmovdqu ymm2, [r11 + 64]
-    vmovdqu ymm3, [r11 + 96]
-    add r10, 128
+    vmovdqu ymm0, [r11 + 32]
+    vmovdqu ymm0, [r11 + 64]
+    vmovdqu ymm0, [r11 + 96]
+    vmovdqu ymm0, [r11 + 128]
+    vmovdqu ymm0, [r11 + 160]
+    vmovdqu ymm0, [r11 + 192]
+    vmovdqu ymm0, [r11 + 224]
+
+    add r10, 256
     and r10, r8
+
     mov r11, rdx
     add r11, r10
-    add rax, 128
+
+    add rax, 256
     cmp rax, rcx
     jb .loop
     ret
