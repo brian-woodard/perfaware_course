@@ -15,6 +15,7 @@
 ;  ========================================================================
 
 global Test_Cache
+global Test_Cache_Nt
 
 section .text
 
@@ -24,32 +25,53 @@ section .text
 ;    rcx: block count
 ;    rdx: read data pointer
 ;     r8: write data pointer
-;     r9: write count
+;     r9: 
 ;
 
 Test_Cache:
     xor rax, rax
     align 64
-.loop:
+.read_loop:
     vmovdqu ymm0, [rdx]
     vmovdqu ymm0, [rdx + 32]
     vmovdqu ymm0, [rdx + 64]
     vmovdqu ymm0, [rdx + 96]
 
-.inner_loop:
-    vmovdqu [r8], ymm0
-    vmovdqu [r8 + 32], ymm0
-    vmovdqu [r8 + 64], ymm0
-    vmovdqu [r8 + 96], ymm0
-    ;vmovntdq [r8], ymm0
-    ;vmovntdq [r8 + 32], ymm0
-    ;vmovntdq [r8 + 64], ymm0
-    ;vmovntdq [r8 + 96], ymm0
-    sub r9, 128
-    jb .inner_loop
+    add rax, 128
+    cmp rax, rcx
+    jb .read_loop
+
+    mov rax, rdx
+.write_loop:
+    vmovdqu [rax], ymm0
+    vmovdqu [rax + 32], ymm0
+    vmovdqu [rax + 64], ymm0
+    vmovdqu [rax + 96], ymm0
+    add rax, 128
+    sub rcx, 128
+    jnz .write_loop
+    ret
+
+Test_Cache_Nt:
+    xor rax, rax
+    align 64
+.read_loop:
+    vmovdqu ymm0, [rdx]
+    vmovdqu ymm0, [rdx + 32]
+    vmovdqu ymm0, [rdx + 64]
+    vmovdqu ymm0, [rdx + 96]
 
     add rax, 128
     cmp rax, rcx
-    jb .loop
-    ret
+    jb .read_loop
 
+    mov rax, rdx
+.write_loop:
+    vmovntdq [rax], ymm0
+    vmovntdq [rax + 32], ymm0
+    vmovntdq [rax + 64], ymm0
+    vmovntdq [rax + 96], ymm0
+    add rax, 128
+    sub rcx, 128
+    jnz .write_loop
+    ret
