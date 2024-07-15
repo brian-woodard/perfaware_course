@@ -44,9 +44,10 @@ typedef double f64;
 #include "listing_0137_os_platform.cpp"
 #include "listing_0109_pagefault_repetition_tester.cpp"
 
-typedef void ASMFunction(u64 Count, u8 *ReadData, u8 *WriteData, u64 WriteCount);
+typedef void ASMFunction(u64 Count, u8 *ReadData, u8 *WriteData);
 
-extern "C" void Test_Cache(u64 Count, u8 *ReadData, u8 *WriteData, u64 WriteCount);
+extern "C" void Test_Cache(u64 Count, u8 *ReadData, u8 *WriteData);
+extern "C" void Test_Cache_Nt(u64 Count, u8 *ReadData, u8 *WriteData);
 #pragma comment (lib, "listing_0159_non_temporal_store")
 
 struct test_function
@@ -57,15 +58,15 @@ struct test_function
 test_function TestFunctions[] =
 {
     {"Test_Cache", Test_Cache},
+    {"Test_Cache_Nt", Test_Cache_Nt},
 };
 
 int main(void)
 {
     InitializeOSPlatform();
     
-    u64 WriteCount = 128;
-    buffer ReadBuffer = AllocateBuffer(1*1024*1024);
-    buffer WriteBuffer = AllocateBuffer(1*1024*1024);
+    buffer ReadBuffer = AllocateBuffer(1*128*1024*1024);
+    buffer WriteBuffer = AllocateBuffer(1*128*1024*1024);
     if(IsValid(ReadBuffer) && IsValid(WriteBuffer))
     {
         // NOTE(casey): Because OSes may not map allocated pages until they are written to, we write garbage
@@ -89,7 +90,7 @@ int main(void)
                 while(IsTesting(Tester))
                 {
                     BeginTime(Tester);
-                    TestFunc.Func(ReadBuffer.Count, ReadBuffer.Data, WriteBuffer.Data, WriteCount);
+                    TestFunc.Func(ReadBuffer.Count, ReadBuffer.Data, WriteBuffer.Data);
                     EndTime(Tester);
                     CountBytes(Tester, ReadBuffer.Count);
                 }
